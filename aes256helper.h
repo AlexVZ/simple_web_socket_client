@@ -35,57 +35,22 @@
 **
 ****************************************************************************/
 
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#ifndef AES256HELPER_H
+#define AES256HELPER_H
 
-#include <QMainWindow>
-#include <QtWebSockets/QWebSocket>
+#include <QObject>
+#include <QtCore>
 
-#include "diffiehellmanhelper.h"
-#include "aes256helper.h"
-
-namespace Ui {
-class MainWindow;
-}
-
-class MainWindow : public QMainWindow
+class AES256Helper : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = 0);
-    ~MainWindow();
+    AES256Helper(QObject *parent = 0);
+    ~AES256Helper();
 
-protected:
-    virtual void keyPressEvent(QKeyEvent *e);
-
-private:
-    Ui::MainWindow *ui;
-
-    bool m_connected;
-    QWebSocket *m_web_socket;
-    int m_connect_status;
-    DiffieHellmanHelper m_dh_helper;
-    AES256Helper m_aes256_helper;
-    bool m_dh_completed;
-
-    void connect_game_server();
-    void disconnect_game_server();
-    QString handle_request(QMap<QString, QString>  &get_args);
-    void setAllEnabled(bool enabled);
-
-    QString trim_host(QString src_host);
-
-private slots:
-    void on_actionExit_triggered();
-
-    void connectButton_clicked(bool);
-    void sendButton_clicked(bool);
-    void dhStartButton_clicked(bool);
-
-    void is_error(QAbstractSocket::SocketError socketError);
-    void state_changed(QAbstractSocket::SocketState state);
-    void processTextMessage(QString message);
+    bool decrypt(QString msg, QString &msg_decrypted, QString key);
+    QString encrypt(QString msg, QString key);
 };
 
-#endif // MAINWINDOW_H
+#endif // AES256HELPER_H

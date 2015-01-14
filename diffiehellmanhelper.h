@@ -35,57 +35,36 @@
 **
 ****************************************************************************/
 
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#ifndef DIFFIEHELLMANHELPER_H
+#define DIFFIEHELLMANHELPER_H
 
-#include <QMainWindow>
-#include <QtWebSockets/QWebSocket>
+#include <QObject>
+#include <QtCore>
 
-#include "diffiehellmanhelper.h"
-#include "aes256helper.h"
+#include <openssl/dh.h>
 
-namespace Ui {
-class MainWindow;
-}
-
-class MainWindow : public QMainWindow
+class DiffieHellmanHelper : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = 0);
-    ~MainWindow();
+    DiffieHellmanHelper(QObject *parent = 0);
+    ~DiffieHellmanHelper();
 
-protected:
-    virtual void keyPressEvent(QKeyEvent *e);
+    QString start();
+    QString startB(QString p, QString g, QString pub_key);
+    bool key(QString pub_key_2);
+    QString get_key();
+    QString get_secret_string();
 
 private:
-    Ui::MainWindow *ui;
+    QString m_server_secret;
 
-    bool m_connected;
-    QWebSocket *m_web_socket;
-    int m_connect_status;
-    DiffieHellmanHelper m_dh_helper;
-    AES256Helper m_aes256_helper;
-    bool m_dh_completed;
+    DH *m_private_key;
+    QString m_key;
 
-    void connect_game_server();
-    void disconnect_game_server();
-    QString handle_request(QMap<QString, QString>  &get_args);
-    void setAllEnabled(bool enabled);
-
-    QString trim_host(QString src_host);
-
-private slots:
-    void on_actionExit_triggered();
-
-    void connectButton_clicked(bool);
-    void sendButton_clicked(bool);
-    void dhStartButton_clicked(bool);
-
-    void is_error(QAbstractSocket::SocketError socketError);
-    void state_changed(QAbstractSocket::SocketState state);
-    void processTextMessage(QString message);
+    QString BinaryCharToHexQString(unsigned char* mem, int size);
+    int HexQStringToBinaryChar(QString src, unsigned char* mem);
 };
 
-#endif // MAINWINDOW_H
+#endif // DIFFIEHELLMANHELPER_H

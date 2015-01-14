@@ -40,7 +40,9 @@
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    ui(new Ui::MainWindow)
+    ui(new Ui::MainWindow),
+    m_connected(false),
+    m_dh_completed(false)
 {
     ui->setupUi(this);
 
@@ -51,6 +53,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->connectButton, SIGNAL(clicked(bool)), this, SLOT(connectButton_clicked(bool)));
     connect(ui->sendButton, SIGNAL(clicked(bool)), this, SLOT(sendButton_clicked(bool)));
+    connect(ui->dhStartButton, SIGNAL(clicked(bool)), this, SLOT(dhStartButton_clicked(bool)));
 
     m_web_socket = new QWebSocket();
     connect(m_web_socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(is_error(QAbstractSocket::SocketError)));
@@ -87,14 +90,12 @@ void MainWindow::setAllEnabled(bool enabled)
     ui->webSocketServerIP->setEnabled(!enabled);
     ui->webSocketServerPort->setEnabled(!enabled);
     ui->sendButton->setEnabled(enabled);
+    ui->dhStartButton->setEnabled(enabled);
 }
 
 void MainWindow::connectButton_clicked(bool)
 {
     setAllEnabled(false);
-    ui->webSocketServerIP->setEnabled(false);
-    ui->webSocketServerPort->setEnabled(false);
-    ui->connectButton->setEnabled(false);
 
     if(m_connected) {
         ui->statusBar->showMessage(tr("Disconnecting..."));
@@ -109,10 +110,23 @@ void MainWindow::sendButton_clicked(bool)
 {
     QString message = ui->lineEdit->text();
     if(message.size() == 0) {
-        ui->statusBar->showMessage(tr("Empty message string; message NOT sent..."));
+        ui->plainTextEdit->appendPlainText(tr("Empty message string; message NOT sent..."));
         return;
     }
-    ui->plainTextEdit->appendPlainText(tr("Outgoing message: ") + message);
+    if(m_dh_completed == false) {
+        ui->plainTextEdit->appendPlainText(tr("Key exchange not completed; message NOT sent..."));
+        return;
+    }
+
+    QString encoded_message = tr("cmd=coded&msg=%1").arg(m_aes256_helper.encrypt(message, m_dh_helper.get_key()));
+    ui->plainTextEdit->appendPlainText(tr("Outgoing message: '%1'; encoded: '%2'").arg(message).arg(encoded_message));
+    m_web_socket->sendTextMessage(encoded_message);
+}
+
+void MainWindow::dhStartButton_clicked(bool)
+{
+    QString message = tr("cmd=begin");
+    ui->plainTextEdit->appendPlainText(tr("Outgoing message: '%1'").arg(message));
     m_web_socket->sendTextMessage(message);
 }
 
@@ -153,6 +167,7 @@ void MainWindow::is_error(QAbstractSocket::SocketError socketError)
     ui->webSocketServerIP->setEnabled(true);
     ui->webSocketServerPort->setEnabled(true);
     ui->connectButton->setEnabled(true);
+    ui->dhStartButton->setEnabled(false);
 }
 
 void MainWindow::state_changed(QAbstractSocket::SocketState state)
@@ -161,6 +176,7 @@ void MainWindow::state_changed(QAbstractSocket::SocketState state)
     if(m_connect_status == 3) {
         m_connected = true;
         ui->connectButton->setEnabled(true);
+        ui->dhStartButton->setEnabled(true);
         ui->connectButton->setText(tr("Disconnect"));
         ui->statusBar->showMessage(tr("Connected"));
         setAllEnabled(true);
@@ -168,15 +184,72 @@ void MainWindow::state_changed(QAbstractSocket::SocketState state)
         m_connected = false;
         ui->webSocketServerIP->setEnabled(true);
         ui->webSocketServerPort->setEnabled(true);
+        ui->dhStartButton->setEnabled(false);
         ui->connectButton->setEnabled(true);
         ui->connectButton->setText(tr("Connect"));
         ui->statusBar->showMessage(tr("Disconnected"));
     }
 }
 
-void MainWindow::processTextMessage(QString message)
+void MainWindow::processTextMessage(QString incomming_message)
 {
-    ui->plainTextEdit->appendPlainText(tr("Incomming message: ") + message);
+    ui->plainTextEdit->appendPlainText(tr("Incomming message: ") + incomming_message);
+    QStringList args_res_data = incomming_message.split(tr("&"));
+    QStringList pair_data;
+    QMap<QString, QString> get_args;
+    for(int i = 0; i < args_res_data.size(); i++) {
+        pair_data = args_res_data[i].split(tr("="));
+        if(pair_data.size() == 2) {
+            get_args[pair_data[0]] = pair_data[1];
+        }
+    }
+
+    QString outgoing_message = handle_request(get_args);
+
+    if(outgoing_message.size() > 0) {
+        ui->plainTextEdit->appendPlainText(tr("Outgoing message: %1").arg(outgoing_message));
+        m_web_socket->sendTextMessage(outgoing_message);
+    }
+}
+QString MainWindow::handle_request(QMap<QString, QString>  &get_args)
+{
+    if(get_args.size() == 0) {
+        return tr("");
+    }
+    if(get_args[tr("result")] != tr("ok")) {
+        return tr("");
+    }
+    if(get_args[tr("cmd")] == tr("begin")) {
+        QString dh_params = m_dh_helper.startB(get_args[tr("p")], get_args[tr("g")], get_args[tr("pub_key")]);
+        return tr("cmd=key&%1").arg(dh_params);
+    } else if(get_args[tr("cmd")] == tr("key")) {
+        QString msg_decrypted;
+        if(m_aes256_helper.decrypt(get_args[tr("check_msg")], msg_decrypted, m_dh_helper.get_key())) { // check MITM
+            if(msg_decrypted == m_dh_helper.get_secret_string()) {
+                m_dh_completed = true;
+                return tr("cmd=coded&msg=%1").arg(m_aes256_helper.encrypt(m_dh_helper.get_secret_string(), m_dh_helper.get_key()));
+            }
+        }
+        return tr("");
+    } else if(get_args[tr("cmd")] == tr("coded")) {
+        if(m_dh_completed) {
+            QString get_args_decrypted_str;
+            if(m_aes256_helper.decrypt(get_args[tr("msg")], get_args_decrypted_str, m_dh_helper.get_key())) {
+                QMap<QString, QString> get_args_decrypted;
+                QStringList args_res_data = get_args_decrypted_str.split(tr("&"));
+                QStringList pair_data;
+                for(int i = 0; i < args_res_data.size(); i++) {
+                    pair_data = args_res_data[i].split(tr("="));
+                    if(pair_data.size() == 2) {
+                        get_args_decrypted[pair_data[0]] = pair_data[1];
+                    }
+                }
+            }
+        } else {
+            return tr("");
+        }
+    }
+    return tr("");
 }
 
 QString MainWindow::trim_host(QString src_host)

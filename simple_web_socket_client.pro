@@ -11,11 +11,17 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 TARGET = simple_web_socket_client
 TEMPLATE = app
 
+LIBS += -lcrypto
+# PKGCONFIG += openssl
 
 SOURCES += main.cpp\
-        mainwindow.cpp
+        mainwindow.cpp \
+    aes256helper.cpp \
+    diffiehellmanhelper.cpp
 
-HEADERS  += mainwindow.h
+HEADERS  += mainwindow.h \
+    aes256helper.h \
+    diffiehellmanhelper.h
 
 FORMS    += mainwindow.ui
 
