@@ -119,8 +119,12 @@ void MainWindow::sendButton_clicked(bool)
     }
 
     QString encoded_message = tr("cmd=coded&msg=%1").arg(m_aes256_helper.encrypt(message, m_dh_helper.get_key()));
-    ui->plainTextEdit->appendPlainText(tr("Outgoing message: '%1'; encoded: '%2'").arg(message).arg(encoded_message));
-    m_web_socket->sendTextMessage(encoded_message);
+    if(encoded_message.size() > 0) {
+        ui->plainTextEdit->appendPlainText(tr("Outgoing message: '%1'; encoded: '%2'").arg(message).arg(encoded_message));
+        m_web_socket->sendTextMessage(encoded_message);
+    } else {
+        ui->plainTextEdit->appendPlainText(tr("Outgoing message ('%1') encode error! Message NOT sent!").arg(message));
+    }
 }
 
 void MainWindow::dhStartButton_clicked(bool)
@@ -225,9 +229,13 @@ QString MainWindow::handle_request(QMap<QString, QString>  &get_args)
     } else if(get_args[tr("cmd")] == tr("key")) {
         QString msg_decrypted;
         if(m_aes256_helper.decrypt(get_args[tr("check_msg")], msg_decrypted, m_dh_helper.get_key())) { // check MITM
-            if(msg_decrypted == m_dh_helper.get_secret_string()) {
+            QString secret_string = m_dh_helper.get_secret_string();
+            if(secret_string.size() == 0) {
+                return tr("");
+            }
+            if(msg_decrypted == secret_string) {
                 m_dh_completed = true;
-                return tr("cmd=coded&msg=%1").arg(m_aes256_helper.encrypt(m_dh_helper.get_secret_string(), m_dh_helper.get_key()));
+                return tr("cmd=coded&msg=%1").arg(m_aes256_helper.encrypt(secret_string, m_dh_helper.get_key()));
             }
         }
         return tr("");
@@ -235,6 +243,7 @@ QString MainWindow::handle_request(QMap<QString, QString>  &get_args)
         if(m_dh_completed) {
             QString get_args_decrypted_str;
             if(m_aes256_helper.decrypt(get_args[tr("msg")], get_args_decrypted_str, m_dh_helper.get_key())) {
+                ui->plainTextEdit->appendPlainText(tr(" decoded message: ") + get_args_decrypted_str);
                 QMap<QString, QString> get_args_decrypted;
                 QStringList args_res_data = get_args_decrypted_str.split(tr("&"));
                 QStringList pair_data;

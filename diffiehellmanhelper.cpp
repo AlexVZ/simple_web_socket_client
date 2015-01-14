@@ -41,7 +41,9 @@ DiffieHellmanHelper::DiffieHellmanHelper(QObject *parent) :
     QObject(parent),
     m_server_secret(tr("server_secret")),
     m_private_key(NULL),
-    m_key(tr(""))
+    m_key(tr("")),
+    m_pub_key_2(NULL),
+    m_is_bob(false)
 {
 
 }
@@ -50,6 +52,7 @@ DiffieHellmanHelper::~DiffieHellmanHelper()
 {
     if(m_private_key) {
         DH_free(m_private_key);
+        m_private_key = NULL;
     }
 }
 
@@ -57,13 +60,15 @@ QString DiffieHellmanHelper::start()
 {
     if(m_private_key == NULL) {
         m_private_key = DH_new();
+        m_private_key->p = NULL;
+        m_private_key->g = NULL;
     }
     // Generate the parameters to be used
     if(DH_generate_parameters_ex(m_private_key, 1024, DH_GENERATOR_2, NULL) != 1) {
     //if(DH_generate_parameters_ex(m_private_key, 2048, DH_GENERATOR_2, NULL) != 1) {
         return tr("p=&g=0&pub_key=0");
     }
-    int codes;
+    int codes = 0;
     if(DH_check(m_private_key, &codes) != 1 || codes != 0) {
         return tr("p=&g=0&pub_key=0");
     }
@@ -102,8 +107,11 @@ QString DiffieHellmanHelper::start()
 }
 QString DiffieHellmanHelper::startB(QString p, QString g, QString pub_key)
 {
+    m_is_bob = true;
     if(m_private_key == NULL) {
         m_private_key = DH_new();
+        m_private_key->p = NULL;
+        m_private_key->g = NULL;
     }
 
     BN_hex2bn(&(m_private_key->p), p.toStdString().c_str() );
@@ -113,15 +121,14 @@ QString DiffieHellmanHelper::startB(QString p, QString g, QString pub_key)
         return tr("pub_key_2=0");
     }
 
-    BIGNUM *BN_pub_key;
-    BN_hex2bn(&(BN_pub_key), pub_key.toStdString().c_str() );
+    BN_hex2bn(&(m_pub_key_2), pub_key.toStdString().c_str() );
 
     int key_size_bytes = DH_size(m_private_key);
     unsigned char *shared_key = (unsigned char *)OPENSSL_malloc(key_size_bytes);
     if(shared_key == NULL) {
         return tr("pub_key_2=0");
     }
-    DH_compute_key(shared_key, BN_pub_key, m_private_key);
+    DH_compute_key(shared_key, m_pub_key_2, m_private_key);
     m_key = BinaryCharToHexQString(shared_key, key_size_bytes);
     OPENSSL_free(shared_key);
 
@@ -138,15 +145,14 @@ QString DiffieHellmanHelper::startB(QString p, QString g, QString pub_key)
 }
 bool DiffieHellmanHelper::key(QString pub_key_2)
 {
-    BIGNUM *BN_pub_key_2;
-    BN_hex2bn(&(BN_pub_key_2), pub_key_2.toStdString().c_str() );
+    BN_hex2bn(&(m_pub_key_2), pub_key_2.toStdString().c_str() );
 
     int key_size_bytes = DH_size(m_private_key);
     unsigned char *shared_key = (unsigned char *)OPENSSL_malloc(key_size_bytes);
     if(shared_key == NULL) {
         return false;
     }
-    DH_compute_key(shared_key, BN_pub_key_2, m_private_key);
+    DH_compute_key(shared_key, m_pub_key_2, m_private_key);
     m_key = BinaryCharToHexQString(shared_key, key_size_bytes);
     OPENSSL_free(shared_key);
 
@@ -158,25 +164,61 @@ QString DiffieHellmanHelper::get_key()
 }
 QString DiffieHellmanHelper::get_secret_string()
 {
-    return m_server_secret; // TODO: md5(BinaryCharToHexQString(BN_bn2hex(m_private_key->pub_key)) + m_server_secret)
+    if(m_pub_key_2 == NULL) {
+        return tr("");
+    }
+
+    char *p_pub_key = BN_bn2hex(m_private_key->pub_key);
+    QString pub_key = tr("0");
+    if(p_pub_key) {
+        pub_key = p_pub_key;
+        OPENSSL_free(p_pub_key);
+    } else {
+        return tr("");
+    }
+
+    char *p_pub_key_2 = BN_bn2hex(m_pub_key_2);
+    QString pub_key_2 = tr("0");
+    if(p_pub_key_2) {
+        pub_key_2 = p_pub_key_2;
+        OPENSSL_free(p_pub_key_2);
+    } else {
+        return tr("");
+    }
+
+    QString secret = tr("");
+    if(m_is_bob) {
+        secret = pub_key_2 + pub_key + m_server_secret;
+    } else {
+        secret = pub_key + pub_key_2 + m_server_secret;
+    }
+    QByteArray md5 = QCryptographicHash::hash(secret.toLatin1(), QCryptographicHash::Md5);
+    QString md5_string = BinaryCharToHexQString((unsigned char *)(md5.constData()), md5.size());
+    return md5_string;
 }
 
 QString DiffieHellmanHelper::BinaryCharToHexQString(unsigned char* mem, int size)
 {
     QString str;
+    QString hex = tr("");
     for(int i = 0; i < size; i++) {
-        str = str + QString("%1").arg((ushort)(mem[i]), 0, 16);
+        QString hex = QString("%1").arg((ushort)(mem[i]), 0, 16);
+        if(hex.size() < 2) {
+            hex = tr("0") + hex;
+        }
+        str += hex;
     }
     return str.trimmed();
 }
 int DiffieHellmanHelper::HexQStringToBinaryChar(QString src, unsigned char *mem)
 {
     memset(mem, 0, src.size());
-    for(int i = 0; i < src.size(); i++) {
+    for(int i = 0; i < src.size(); i += 2) {
         QString str = src.at(i);
+        str += src.at(i+1);
         bool ok;
         unsigned int parsedValue = str.toUInt(&ok, 16);
-        mem[i] = parsedValue;
+        mem[i/2] = parsedValue;
         if(!ok) {
             return i;
         }

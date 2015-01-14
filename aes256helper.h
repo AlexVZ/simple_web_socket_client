@@ -40,6 +40,11 @@
 
 #include <QObject>
 #include <QtCore>
+#include <QPlainTextEdit>
+
+#include <openssl/crypto.h>
+#include <openssl/aes.h>
+#include <openssl/sha.h>
 
 class AES256Helper : public QObject
 {
@@ -51,6 +56,11 @@ public:
 
     bool decrypt(QString msg, QString &msg_decrypted, QString key);
     QString encrypt(QString msg, QString key);
+
+private:
+    bool convert_key(QString key, unsigned char *p_key);
+    QString BinaryCharToHexQString(unsigned char* mem, int size);
+    int HexQStringToBinaryChar(QString src, unsigned char* mem);
 };
 
 #endif // AES256HELPER_H

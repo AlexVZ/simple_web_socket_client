@@ -40,6 +40,7 @@
 
 #include <QObject>
 #include <QtCore>
+#include <QPlainTextEdit>
 
 #include <openssl/dh.h>
 
@@ -62,6 +63,8 @@ private:
 
     DH *m_private_key;
     QString m_key;
+    BIGNUM *m_pub_key_2;
+    bool m_is_bob;
 
     QString BinaryCharToHexQString(unsigned char* mem, int size);
     int HexQStringToBinaryChar(QString src, unsigned char* mem);
