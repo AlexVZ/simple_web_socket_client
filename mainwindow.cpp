@@ -151,6 +151,7 @@ void MainWindow::disconnect_game_server()
 
 void MainWindow::is_error(QAbstractSocket::SocketError socketError)
 {
+    m_dh_completed = false;
     QString msg = tr("Unknown error: %1.").arg(socketError);
     switch (socketError) {
     case QAbstractSocket::RemoteHostClosedError:
@@ -186,6 +187,7 @@ void MainWindow::state_changed(QAbstractSocket::SocketState state)
         setAllEnabled(true);
     } else if(state == 0 || state == 6) {
         m_connected = false;
+        m_dh_completed = false;
         ui->webSocketServerIP->setEnabled(true);
         ui->webSocketServerPort->setEnabled(true);
         ui->dhStartButton->setEnabled(false);

@@ -57,7 +57,7 @@ public:
     ~MainWindow();
 
 protected:
-    virtual void keyPressEvent(QKeyEvent *e);
+    virtual void keyPressEvent(QKeyEvent *);
 
 private:
     Ui::MainWindow *ui;
@@ -71,10 +71,10 @@ private:
 
     void connect_game_server();
     void disconnect_game_server();
-    QString handle_request(QMap<QString, QString>  &get_args);
-    void setAllEnabled(bool enabled);
+    QString handle_request(QMap<QString, QString>  &);
+    void setAllEnabled(bool);
 
-    QString trim_host(QString src_host);
+    QString trim_host(QString);
 
 private slots:
     void on_actionExit_triggered();
@@ -83,9 +83,9 @@ private slots:
     void sendButton_clicked(bool);
     void dhStartButton_clicked(bool);
 
-    void is_error(QAbstractSocket::SocketError socketError);
-    void state_changed(QAbstractSocket::SocketState state);
-    void processTextMessage(QString message);
+    void is_error(QAbstractSocket::SocketError);
+    void state_changed(QAbstractSocket::SocketState);
+    void processTextMessage(QString);
 };
 
 #endif // MAINWINDOW_H
