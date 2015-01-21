@@ -148,19 +148,8 @@ bool AES256Helper::convert_key(QString key, unsigned char *p_key)
             OPENSSL_free(long_key);
             return false;
         }
-        SHA256_CTX context;
-        if(!SHA256_Init(&context)) {
-            OPENSSL_free(long_key);
-            return false;
-        }
-        if(!SHA256_Update(&context, long_key, key.size())) {
-            OPENSSL_free(long_key);
-            return false;
-        }
+        SHA256(long_key, key.size()/2, p_key);
         OPENSSL_free(long_key);
-        if(!SHA256_Final(p_key, &context)) {
-            return false;
-        }
     }
     return true;
 }
